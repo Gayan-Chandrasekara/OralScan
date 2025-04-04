@@ -6,40 +6,131 @@
     <title>Oral Cavity AI Diagnosis</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxjs/dist/onnx.min.js"></script>
     <style>
-        body { text-align: center; font-family: Arial, sans-serif; }
-        video, canvas { width: 100%; max-width: 400px; display: block; margin: auto; }
-        button { margin: 10px; padding: 10px; font-size: 16px; }
+        body {
+            text-align: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f8f8f8;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        h2 {
+            font-size: 24px;
+            color: #1d1d1d;
+        }
+
+        .container {
+            max-width: 400px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            border: none;
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+
+        #capture {
+            background-color: #007AFF;
+            color: white;
+        }
+
+        #uploadButton {
+            background-color: #34C759;
+            color: white;
+            display: none;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        video, canvas, img {
+            width: 100%;
+            max-width: 380px;
+            display: block;
+            margin: auto;
+            border-radius: 10px;
+            box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        img {
+            display: none;
+            margin-top: 10px;
+        }
+
+        p {
+            font-size: 18px;
+            color: #444;
+        }
     </style>
 </head>
 <body>
-    <h2>Oral Cavity AI Diagnosis</h2>
+    <div class="container">
+        <h2>Oral Cavity AI Diagnosis</h2>
 
-    <!-- Camera Capture -->
-    <video id="video" autoplay></video>
-    <button id="capture">Capture Photo</button>
-    <canvas id="canvas"></canvas>
+        <!-- Photo Capture -->
+        <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
+        <button id="capture">Capture Photo</button>
+        <img id="capturedImage">
+        <canvas id="canvas"></canvas>
 
-    <!-- Run Prediction -->
-    <button onclick="runInference()">Upload & Predict</button>
-    <p id="result">Waiting for prediction...</p>
+        <!-- Run Prediction -->
+        <button id="uploadButton" onclick="runInference()">Upload & Predict</button>
+        <p id="result">Waiting for prediction...</p>
+    </div>
 
     <script>
-        const video = document.getElementById("video");
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => video.srcObject = stream)
-            .catch(err => console.error("Camera error:", err));
+        const captureButton = document.getElementById("capture");
+        const fileInput = document.getElementById("fileInput");
+        const capturedImage = document.getElementById("capturedImage");
+        const uploadButton = document.getElementById("uploadButton");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
 
-        document.getElementById("capture").addEventListener("click", () => {
-            const canvas = document.getElementById("canvas");
-            const ctx = canvas.getContext("2d");
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
+        // Capture photo via file input
+        captureButton.addEventListener("click", () => {
+            fileInput.click();
+        });
+
+        // Event listener for file input change (photo captured)
+        fileInput.addEventListener("change", async (event) => {
+            const capturedFile = event.target.files[0];
+            if (capturedFile) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    capturedImage.src = e.target.result;
+                    capturedImage.style.display = "block";
+                    uploadButton.style.display = "block";
+
+                    // Draw captured image onto canvas
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = function() {
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        ctx.drawImage(img, 0, 0);
+                    };
+                };
+                reader.readAsDataURL(capturedFile);
+            }
         });
 
         async function runInference() {
             const img = new Image();
-            img.src = document.getElementById("canvas").toDataURL("image/png");
+            img.src = capturedImage.src;
 
             img.onload = async function() {
                 const processedImage = preprocessImage(img);
