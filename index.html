@@ -111,11 +111,12 @@
             if (capturedFile) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
+                    capturedImage.style.display = "none";  // Ensure no duplicate display
                     capturedImage.src = e.target.result;
                     capturedImage.style.display = "block";
                     uploadButton.style.display = "block";
-
-                    // Draw captured image onto canvas
+        
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);  // Clear previous image
                     const img = new Image();
                     img.src = e.target.result;
                     img.onload = function() {
@@ -127,6 +128,7 @@
                 reader.readAsDataURL(capturedFile);
             }
         });
+
 
         async function runInference() {
             const img = new Image();
