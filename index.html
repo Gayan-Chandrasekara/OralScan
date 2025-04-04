@@ -142,7 +142,7 @@
                 const processedImage = preprocessImage(img);
 
                 const session = new onnx.InferenceSession();
-                await session.loadModel("https://github.com/your-repo/model.onnx");
+                await session.loadModel("https://huggingface.co/spaces/GayanResearch/OS/resolve/main/placeholder_model.onnx");
 
                 const outputMap = await session.run([processedImage]);
                 document.getElementById("result").innerText = "Prediction: " + outputMap.values().next().value;
