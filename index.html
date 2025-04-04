@@ -110,12 +110,16 @@
             if (capturedFile) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    capturedImage.style.display = "none";  // Ensure no duplicate display
+                    // Hide canvas to prevent duplicate display
+                    canvas.style.display = "none"; 
+        
+                    // Show only the captured image
                     capturedImage.src = e.target.result;
                     capturedImage.style.display = "block";
                     uploadButton.style.display = "block";
         
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);  // Clear previous image
+                    // Clear canvas before drawing new image
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
                     const img = new Image();
                     img.src = e.target.result;
                     img.onload = function() {
@@ -127,6 +131,7 @@
                 reader.readAsDataURL(capturedFile);
             }
         });
+
 
 
         async function runInference() {
