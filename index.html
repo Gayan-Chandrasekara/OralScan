@@ -1,73 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>OralScan</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Segmentation</title>
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
   <script defer src="overlay.js"></script>
   <style>
-    /* Global Apple-like design */
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f2f2f7;
-      color: #1c1c1e;
-      text-align: center;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0; padding: 20px; text-align: center;
+      background: #f9f9f9; color: #222;
     }
-
-    header {
-      background: rgba(255, 255, 255, 0.6);
-      backdrop-filter: saturate(180%) blur(20px);
-      border-bottom: 1px solid #ccc;
-      padding: 1rem;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+    button {
+      font-size: 16px;
+      padding: 10px 20px;
+      border-radius: 12px;
+      border: none;
+      background: #007AFF;
+      color: white;
+      margin-top: 12px;
     }
-
-    h2 {
-      font-size: 1.4rem;
-      margin: 0;
-      color: #111;
-    }
-
-    main {
-      padding: 1.5rem;
-    }
-
     video, canvas {
-      width: 100%;
-      max-width: 390px;
-      border-radius: 20px;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-      margin: 1rem 0;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      body {
-        background: #1c1c1e;
-        color: #f2f2f7;
-      }
-      header {
-        background: rgba(28, 28, 30, 0.7);
-        border-bottom: 1px solid #444;
-      }
-      h2 {
-        color: #f2f2f7;
-      }
+      width: 90%; max-width: 400px; border-radius: 16px;
+      margin-top: 10px;
     }
   </style>
 </head>
 <body>
-  <header>
-    <h2>OralScan</h2>
-  </header>
-  <main>
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="outputCanvas"></canvas>
-  </main>
+  <h2>Live Segmentation Overlay</h2>
+  <video id="video" autoplay playsinline muted></video><br>
+  <button id="captureBtn">Capture & Segment</button><br>
+  <canvas id="outputCanvas" width="512" height="512"></canvas>
 </body>
 </html>
