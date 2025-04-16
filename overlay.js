@@ -1,23 +1,12 @@
+const MODEL_URL = "https://firebasestorage.googleapis.com/v0/b/oral-cancer-detector-1e004.firebasestorage.app/o/model.onnx?alt=media&token=d17886be-78e8-4916-a377-4ff3c6b7ef68";
+const MODEL_KEY = "cached_model";
 let session = null;
-let modelUrl = "https://firebasestorage.googleapis.com/v0/b/oral-cancer-detector-1e004.firebasestorage.app/o/model.onnx?alt=media&token=d17886be-78e8-4916-a377-4ff3c6b7ef68";
 
-// Elements
-const downloadBtn = document.getElementById("downloadModel");
-const progressBar = document.getElementById("modelProgress");
-const progressText = document.getElementById("progressPercent");
-const captureBtn = document.getElementById("capture");
-const fileInput = document.getElementById("fileInput");
-const imageElement = document.getElementById("capturedImage");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-
-// ONNX model download with progress
-async function downloadModelWithProgress(url) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Failed to fetch model");
-
-  const contentLength = +response.headers.get("Content-Length");
+// Utility: Fetch and store model in IndexedDB
+async function fetchAndCacheModel(progressCallback) {
+  const response = await fetch(MODEL_URL);
   const reader = response.body.getReader();
+  const contentLength = +response.headers.get('Content-Length');
   let receivedLength = 0;
   let chunks = [];
 
@@ -26,133 +15,134 @@ async function downloadModelWithProgress(url) {
     if (done) break;
     chunks.push(value);
     receivedLength += value.length;
-
-    const percent = Math.round((receivedLength / contentLength) * 100);
-    progressBar.value = percent;
-    progressText.textContent = `${percent}%`;
-  }
-
-  let chunksAll = new Uint8Array(receivedLength);
-  let position = 0;
-  for (let chunk of chunks) {
-    chunksAll.set(chunk, position);
-    position += chunk.length;
-  }
-
-  console.log("Model downloaded. Loading...");
-  session = await ort.InferenceSession.create(chunksAll.buffer);
-  console.log("Model loaded.");
-}
-
-// Trigger model download
-downloadBtn.addEventListener("click", async () => {
-  progressBar.style.display = "block";
-  progressText.textContent = "0%";
-  try {
-    await downloadModelWithProgress(modelUrl);
-    downloadBtn.disabled = true;
-    progressText.textContent = "Download complete ✅";
-  } catch (err) {
-    console.error(err);
-    progressText.textContent = "Download failed ❌";
-  }
-});
-
-// Trigger file input
-captureBtn.addEventListener("click", () => {
-  fileInput.click();
-});
-
-// On file selected
-fileInput.addEventListener("change", async (event) => {
-  const file = event.target.files[0];
-  if (!file || !session) return;
-
-  const img = await loadImage(file);
-  const square = cropToSquare(img);
-  const resized = await resizeImage(square, 512, 512);
-  imageElement.src = resized.toDataURL();
-
-  const inputTensor = preprocessImage(resized);
-  const output = await session.run({ [session.inputNames[0]]: inputTensor });
-  const mask = new Uint8Array(output[session.outputNames[0]].data);
-  const [height, width] = [512, 512];
-  const result = postprocessMask(mask, width, height);
-
-  canvas.width = width;
-  canvas.height = height;
-  ctx.putImageData(result, 0, 0);
-});
-
-// Load image from file input
-function loadImage(file) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-// Crop to square
-function cropToSquare(image) {
-  const canvas = document.createElement("canvas");
-  const size = Math.min(image.width, image.height);
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  const sx = (image.width - size) / 2;
-  const sy = (image.height - size) / 2;
-  ctx.drawImage(image, sx, sy, size, size, 0, 0, size, size);
-  return canvas;
-}
-
-// Resize canvas image to 512x512
-function resizeImage(sourceCanvas, width, height) {
-  return new Promise((resolve) => {
-    const resizedCanvas = document.createElement("canvas");
-    resizedCanvas.width = width;
-    resizedCanvas.height = height;
-    const ctx = resizedCanvas.getContext("2d");
-    ctx.drawImage(sourceCanvas, 0, 0, width, height);
-    resolve(resizedCanvas);
-  });
-}
-
-// Preprocess image to Float32 tensor [1,3,512,512]
-function preprocessImage(canvas) {
-  const ctx = canvas.getContext("2d");
-  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const { data, width, height } = imgData;
-  const floatData = new Float32Array(3 * width * height);
-
-  const mean = [0.485, 0.456, 0.406];
-  const std = [0.229, 0.224, 0.225];
-
-  for (let i = 0; i < width * height; i++) {
-    for (let c = 0; c < 3; c++) {
-      floatData[c * width * height + i] = ((data[i * 4 + c] / 255.0) - mean[c]) / std[c];
+    if (progressCallback) {
+      const percent = Math.floor((receivedLength / contentLength) * 100);
+      progressCallback(percent);
     }
   }
 
-  return new ort.Tensor("float32", floatData, [1, 3, height, width]);
-}
-
-// Postprocess mask and overlay on canvas
-function postprocessMask(mask, width, height) {
-  const colorMap = {
-    0: [0, 0, 0],        // background
-    1: [255, 0, 0],      // lesion
-    2: [0, 0, 0]         // mouth
-  };
-
-  const imageData = new ImageData(width, height);
-  for (let i = 0; i < width * height; i++) {
-    const label = mask[i];
-    const [r, g, b] = colorMap[label] || [0, 0, 0];
-    imageData.data[i * 4 + 0] = r;
-    imageData.data[i * 4 + 1] = g;
-    imageData.data[i * 4 + 2] = b;
-    imageData.data[i * 4 + 3] = 128; // semi-transparent
+  const modelArray = new Uint8Array(receivedLength);
+  let position = 0;
+  for (let chunk of chunks) {
+    modelArray.set(chunk, position);
+    position += chunk.length;
   }
-  return imageData;
+
+  await saveModelToIndexedDB(modelArray);
+  return modelArray;
 }
+
+// IndexedDB helpers
+function openIndexedDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("ModelDB", 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore("models");
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveModelToIndexedDB(arrayBuffer) {
+  const db = await openIndexedDB();
+  const tx = db.transaction("models", "readwrite");
+  tx.objectStore("models").put(arrayBuffer, MODEL_KEY);
+  return tx.complete;
+}
+
+async function loadModelFromIndexedDB() {
+  const db = await openIndexedDB();
+  const tx = db.transaction("models", "readonly");
+  const data = await tx.objectStore("models").get(MODEL_KEY);
+  return data;
+}
+
+// Load ONNX model
+async function loadModel() {
+  const modelArrayBuffer = await loadModelFromIndexedDB();
+  if (!modelArrayBuffer) throw new Error("Model not found in IndexedDB");
+  session = await ort.InferenceSession.create(modelArrayBuffer);
+  console.log("ONNX model loaded.");
+}
+
+// Image preprocessing
+function preprocessImage(imageElement) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  const minDim = Math.min(imageElement.width, imageElement.height);
+  const sx = (imageElement.width - minDim) / 2;
+  const sy = (imageElement.height - minDim) / 2;
+
+  canvas.width = 512;
+  canvas.height = 512;
+
+  ctx.drawImage(imageElement, sx, sy, minDim, minDim, 0, 0, 512, 512);
+  const imageData = ctx.getImageData(0, 0, 512, 512).data;
+
+  const input = new Float32Array(1 * 3 * 512 * 512);
+  for (let i = 0; i < 512 * 512; i++) {
+    const r = imageData[i * 4] / 255;
+    const g = imageData[i * 4 + 1] / 255;
+    const b = imageData[i * 4 + 2] / 255;
+
+    input[i] = (r - 0.485) / 0.229;
+    input[i + 512 * 512] = (g - 0.456) / 0.224;
+    input[i + 2 * 512 * 512] = (b - 0.406) / 0.225;
+  }
+
+  return new ort.Tensor("float32", input, [1, 3, 512, 512]);
+}
+
+// Inference + Overlay
+async function runInference(imageElement) {
+  const inputTensor = preprocessImage(imageElement);
+  const output = await session.run({ [session.inputNames[0]]: inputTensor });
+  const outputTensor = output[session.outputNames[0]];
+  const prediction = outputTensor.data;
+  const outputCanvas = document.getElementById("canvas");
+  const ctx = outputCanvas.getContext("2d");
+  const imageData = ctx.createImageData(512, 512);
+
+  for (let i = 0; i < 512 * 512; i++) {
+    const value = prediction[i * 3 + 1] > 0.5 ? 255 : 0; // Lesion class
+    imageData.data[i * 4] = value;
+    imageData.data[i * 4 + 1] = 0;
+    imageData.data[i * 4 + 2] = 0;
+    imageData.data[i * 4 + 3] = 100;
+  }
+
+  ctx.clearRect(0, 0, 512, 512);
+  ctx.drawImage(imageElement, 0, 0, 512, 512);
+  ctx.putImageData(imageData, 0, 0);
+}
+
+// UI Handlers
+document.getElementById("downloadModel").addEventListener("click", async () => {
+  const progressDiv = document.getElementById("progress");
+  progressDiv.textContent = "Downloading...";
+  try {
+    await fetchAndCacheModel(percent => {
+      progressDiv.textContent = `Downloading: ${percent}%`;
+    });
+    await loadModel();
+    progressDiv.textContent = "Model downloaded and ready.";
+  } catch (e) {
+    progressDiv.textContent = "Download failed.";
+    console.error(e);
+  }
+});
+
+document.getElementById("capture").addEventListener("click", () => {
+  document.getElementById("fileInput").click();
+});
+
+document.getElementById("fileInput").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const img = document.getElementById("capturedImage");
+  img.src = URL.createObjectURL(file);
+  img.onload = () => runInference(img);
+});
