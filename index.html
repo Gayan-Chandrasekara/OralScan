@@ -1,35 +1,40 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <title>Oral Cancer Segmentation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Real-Time Segmentation</title>
+  <link rel="manifest" href="manifest.json">
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
   <script defer src="overlay.js"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      margin: 0; padding: 20px; text-align: center;
-      background: #f9f9f9; color: #222;
+      text-align: center;
+      margin: 0;
+      padding: 1em;
+      background: #f9f9f9;
     }
-    button {
-      font-size: 16px;
-      padding: 10px 20px;
-      border-radius: 12px;
-      border: none;
-      background: #007AFF;
-      color: white;
-      margin-top: 12px;
-    }
+    h2 { color: #333; }
     video, canvas {
-      width: 90%; max-width: 400px; border-radius: 16px;
+      width: 90%;
+      max-width: 400px;
       margin-top: 10px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
   </style>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(reg => console.log('Service Worker registered:', reg.scope))
+        .catch(err => console.error('SW registration failed:', err));
+    }
+  </script>
 </head>
 <body>
-  <h2>Live Segmentation Overlay</h2>
-  <video id="video" autoplay playsinline muted></video><br>
-  <button id="captureBtn">Capture & Segment</button><br>
+  <h2>Oral Cancer Live Segmentation</h2>
+  <video id="video" autoplay playsinline muted></video>
   <canvas id="outputCanvas" width="512" height="512"></canvas>
 </body>
 </html>
