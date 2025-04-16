@@ -1,29 +1,46 @@
-const CACHE_NAME = 'oral-cancer-app-v1';
+// service-worker.js
+const CACHE_NAME = 'oral-cancer-detector-cache-v1';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/overlay.js',
-  '/service-worker.js',
-  'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js',
-  'https://firebasestorage.googleapis.com/v0/b/oral-cancer-detector-1e004.firebasestorage.app/o/model.onnx?alt=media&token=d17886be-78e8-4916-a377-4ff3c6b7ef68'
+    '/',
+    '/index.html',
+    '/overlay.js', 
+    '/style.css',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.7.0/dist/onnxruntime-web.js',
+    'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs',
+    // Add other assets you want to cache (e.g., model files, images)
 ];
 
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
-  );
+self.addEventListener('install', (event) => {
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then((cache) => {
+                return cache.addAll(urlsToCache);
+            })
+    );
 });
 
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.map(key => key !== CACHE_NAME && caches.delete(key)))
-    )
-  );
+self.addEventListener('activate', (event) => {
+    const cacheWhitelist = [CACHE_NAME];
+    event.waitUntil(
+        caches.keys().then((cacheNames) => {
+            return Promise.all(
+                cacheNames.map((cacheName) => {
+                    if (!cacheWhitelist.includes(cacheName)) {
+                        return caches.delete(cacheName);
+                    }
+                })
+            );
+        })
+    );
 });
 
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request).then(resp => resp || fetch(event.request))
-  );
+self.addEventListener('fetch', (event) => {
+    event.respondWith(
+        caches.match(event.request).then((cachedResponse) => {
+            if (cachedResponse) {
+                return cachedResponse; // Return the cached resource if available
+            }
+            return fetch(event.request); // Otherwise, fetch it from the network
+        })
+    );
 });
