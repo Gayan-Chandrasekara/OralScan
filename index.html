@@ -2,39 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Oral Cancer Segmentation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="manifest" href="manifest.json">
+  <title>Real-time Segmentation Overlay</title>
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
   <script defer src="overlay.js"></script>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      text-align: center;
-      margin: 0;
-      padding: 1em;
-      background: #f9f9f9;
-    }
-    h2 { color: #333; }
-    video, canvas {
-      width: 90%;
-      max-width: 400px;
-      margin-top: 10px;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
+    body { font-family: sans-serif; text-align: center; }
+    video, canvas, img { width: 90%; max-width: 400px; margin-top: 10px; }
   </style>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('service-worker.js')
-        .then(reg => console.log('Service Worker registered:', reg.scope))
-        .catch(err => console.error('SW registration failed:', err));
-    }
-  </script>
 </head>
 <body>
-  <h2>Oral Cancer Live Segmentation</h2>
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="outputCanvas" width="512" height="512"></canvas>
+  <h2>Live Segmentation</h2>
+  <!-- Photo Capture Input -->
+  <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
+  <button id="capture">Capture Photo</button>
+  
+  <img id="capturedImage" style="display:none;" />
+  <canvas id="canvas"></canvas>
+
+  <!-- Service Worker setup remains intact -->
+  <script src="serviceWorkerSetup.js"></script>
 </body>
 </html>
+
