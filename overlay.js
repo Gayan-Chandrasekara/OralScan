@@ -82,5 +82,5 @@ captureBtn.onclick = runInference;
 
 (async () => {
   await initCamera();
-  session = await ort.InferenceSession.create("gs://oral-cancer-detector-1e004.firebasestorage.app/model.onnx");
+  session = await ort.InferenceSession.create("https://firebasestorage.googleapis.com/v0/b/oral-cancer-detector-1e004.appspot.com/o/model.onnx?alt=media");
 })();
