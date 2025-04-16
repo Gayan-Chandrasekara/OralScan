@@ -18,6 +18,10 @@
 </head>
 <body>
 
+    <!-- Download Model Section -->
+    <button id="downloadModel">Download Model</button>
+    <br>
+
     <!-- Capture Photo Section -->
     <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
     <button id="capture">Capture Photo</button>
@@ -35,6 +39,9 @@
     <script src="overlay.js"></script>
 
     <script>
+        // Global variable to hold the model path after downloading
+        let model = null;
+
         // Check if the browser supports service workers
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -48,21 +55,67 @@
             });
         }
 
-        // Wait for window to load and then initialize the required functions
         window.onload = function () {
-            fileInput = document.getElementById("fileInput");
-            captureButton = document.getElementById("capture");
-            capturedImage = document.getElementById("capturedImage");
-            canvas = document.getElementById("canvas");
+            // Download Model Button
+            const downloadModelButton = document.getElementById('downloadModel');
+            downloadModelButton.addEventListener('click', downloadModel);
 
-            loadModel();
+            // Other button events (capture image, etc.)
+            const fileInput = document.getElementById("fileInput");
+            const captureButton = document.getElementById("capture");
+            const capturedImage = document.getElementById("capturedImage");
+            const canvas = document.getElementById("canvas");
 
+            // Load model once downloaded (this part can be invoked after model download)
             captureButton.addEventListener("click", () => {
                 fileInput.click();  // Trigger file input when capture button is clicked
             });
 
             fileInput.addEventListener("change", handleCapture);
         };
+
+        // Function to download model from Firebase Storage
+        function downloadModel() {
+            // URL for the model hosted on Firebase Storage
+            const modelURL = 'https://firebasestorage.googleapis.com/v0/b/oral-cancer-detector-1e004.firebasestorage.app/o/model.onnx?alt=media&token=d17886be-78e8-4916-a377-4ff3c6b7ef68';
+
+            // Fetch model file
+            fetch(modelURL)
+                .then(response => {
+                    if (response.ok) {
+                        return response.arrayBuffer();
+                    }
+                    throw new Error('Failed to download model');
+                })
+                .then(data => {
+                    model = new onnx.Model(data);
+                    console.log("Model successfully downloaded and loaded.");
+                    alert("Model downloaded successfully!");
+                })
+                .catch(error => {
+                    console.error("Error downloading model:", error);
+                    alert("Error downloading model!");
+                });
+        }
+
+        // Handle image capture and inference (you can use your existing methods for this)
+        function handleCapture(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        // Process the image and run inference
+                        capturedImage.src = img.src;
+                        capturedImage.style.display = 'block';
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
     </script>
 </body>
 </html>
+
