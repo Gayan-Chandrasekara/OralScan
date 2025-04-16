@@ -10,6 +10,8 @@
     video, canvas, img { width: 90%; max-width: 400px; margin: 10px auto; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
     button { padding: 10px 20px; font-size: 16px; border: none; border-radius: 8px; background: #007aff; color: white; margin: 1rem; }
     #progress { margin-top: 10px; font-weight: bold; }
+    .progress-bar-container { width: 100%; background: #e0e0e0; border-radius: 12px; height: 20px; margin-top: 10px; }
+    .progress-bar { width: 0%; height: 100%; background: #4caf50; border-radius: 12px; }
   </style>
 </head>
 <body>
@@ -17,11 +19,8 @@
   
   <button id="downloadModel">Download Model</button>
   <div id="progress">Model not downloaded</div>
+  <div class="progress-bar-container">
+    <div id="progressBar" class="progress-bar"></div>
+  </div>
 
-  <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
-  <button id="capture">Capture Photo</button>
-
-  <img id="capturedImage" alt="Captured Image" />
-  <canvas id="canvas" width="512" height="512"></canvas>
-</body>
-</html>
+  <input type="file" id="fileInput" accept="image/*" capture="*
