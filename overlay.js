@@ -155,7 +155,7 @@ window.onload = function () {
     loadModel();
 
     captureButton.addEventListener("click", () => {
-        fileInput.click();
+        fileInput.click();  // Trigger file input when capture button is clicked
     });
 
     fileInput.addEventListener("change", handleCapture);
