@@ -1,26 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Oral Cancer Segmentation</title>
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-  <script defer src="overlay.js"></script>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; margin: 2rem; }
-    video, canvas, img { width: 90%; max-width: 400px; margin: 10px auto; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-    button { padding: 10px 20px; font-size: 16px; border: none; border-radius: 8px; background: #007aff; color: white; margin: 1rem; }
-    #progress { margin-top: 10px; font-weight: bold; }
-    .progress-bar-container { width: 100%; background: #e0e0e0; border-radius: 12px; height: 20px; margin-top: 10px; }
-    .progress-bar { width: 0%; height: 100%; background: #4caf50; border-radius: 12px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oral Cavity AI Diagnosis</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/onnxruntime-web.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        canvas, img {
+            max-width: 90%;
+            margin: 10px auto;
+            display: block;
+        }
+    </style>
 </head>
 <body>
-  <h2>Oral Cancer Detection</h2>
-  
-  <button id="downloadModel">Download Model</button>
-  <div id="progress">Model not downloaded</div>
-  <div class="progress-bar-container">
-    <div id="progressBar" class="progress-bar"></div>
-  </div>
+    <h1>Oral Cavity AI Diagnosis</h1>
+    <input type="file" id="fileInput" accept=".pt" style="margin-bottom: 10px;">
+    <button onclick="runInference()">Run Inference</button>
+    <canvas id="canvas"></canvas>
+    <p id="status">Upload a processed input file and press Run Inference</p>
 
-  <input type="file" id="fileInput" accept="image/*" capture="*
+    <script>
+        // Predefine class colors
+        const classColors = {
+            0: [0, 0, 0],        // Background
+            1: [255, 0, 0],      // Lesion
+            2: [0, 255, 0]       // Mouth
+        };
+
+        // Tensor preprocessing (mocked as we are not handling .pt files in JS)
+        async function preprocessInput(inputTensor) {
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            
+            canvas.width = 512; // Resize to 512x512 as required by your model
+            canvas.height = 512;
+
+            // Assuming normalized input, create a Float32Array tensor
+            const floatArray = new Float32Array(3 * 512 * 512); // Replace this with proper preprocessing
+            return new ort.Tensor("float32", floatArray, [1, 3, 512, 512]); // Mock input
+        }
+
+        async function runInference() {
+            const status = document.getElementById("status");
+            status.textContent = "Loading model...";
+            
+            // Load ONNX model from Google Drive
+            const session = await ort.InferenceSession.create("https://drive.google.com/uc?id=YOUR_FILE_ID&export=download");
+            status.textContent = "Model loaded. Running inference...";
+
+            // Mock input tensor for demonstration
+            const inputTensor = await preprocessInput();
+
+            // Run inference
+            const outputMap = await session.run({ input_name: inputTensor });
+            const outputTensor = outputMap.output_name;
+
+            // Post-process output (mock visualization)
+            const mask = new Uint8Array(outputTensor.data); // Replace with actual argmax logic
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext("2d");
+
+            canvas.width = 512;
+            canvas.height = 512;
+
+            const imgData = ctx.createImageData(512, 512);
+            for (let i = 0; i < mask.length; i++) {
+                const color = classColors[mask[i]] || [0, 0, 0];
+                imgData.data[i * 4 + 0] = color[0]; // R
+                imgData.data[i * 4 + 1] = color[1]; // G
+                imgData.data[i * 4 + 2] = color[2]; // B
+                imgData.data[i * 4 + 3] = 255;      // Alpha
+            }
+            ctx.putImageData(imgData, 0, 0);
+
+            status.textContent = "Inference complete! Output displayed.";
+        }
+    </script>
+</body>
+</html>
