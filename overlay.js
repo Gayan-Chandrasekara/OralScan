@@ -1,162 +1,158 @@
-let model, inputImage, canvas, capturedImage, fileInput, captureButton;
+let session = null;
+let modelUrl = "https://firebasestorage.googleapis.com/v0/b/oral-cancer-detector-1e004.firebasestorage.app/o/model.onnx?alt=media&token=d17886be-78e8-4916-a377-4ff3c6b7ef68";
 
-async function loadModel() {
-    const modelUrl = "https://firebasestorage.googleapis.com/v0/b/oral-cancer-detector-1e004.firebasestorage.app/o/model.onnx?alt=media&token=d17886be-78e8-4916-a377-4ff3c6b7ef68"; // Your ONNX model URL
-    model = await ort.InferenceSession.create(modelUrl);
+// Elements
+const downloadBtn = document.getElementById("downloadModel");
+const progressBar = document.getElementById("modelProgress");
+const progressText = document.getElementById("progressPercent");
+const captureBtn = document.getElementById("capture");
+const fileInput = document.getElementById("fileInput");
+const imageElement = document.getElementById("capturedImage");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+// ONNX model download with progress
+async function downloadModelWithProgress(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Failed to fetch model");
+
+  const contentLength = +response.headers.get("Content-Length");
+  const reader = response.body.getReader();
+  let receivedLength = 0;
+  let chunks = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    receivedLength += value.length;
+
+    const percent = Math.round((receivedLength / contentLength) * 100);
+    progressBar.value = percent;
+    progressText.textContent = `${percent}%`;
+  }
+
+  let chunksAll = new Uint8Array(receivedLength);
+  let position = 0;
+  for (let chunk of chunks) {
+    chunksAll.set(chunk, position);
+    position += chunk.length;
+  }
+
+  console.log("Model downloaded. Loading...");
+  session = await ort.InferenceSession.create(chunksAll.buffer);
+  console.log("Model loaded.");
 }
 
-function denormalize(tensor) {
-    const mean = [0.485, 0.456, 0.406];
-    const std = [0.229, 0.224, 0.225];
-    tensor = tensor.mul(std).add(mean);
-    return tensor.clamp(0, 1);
+// Trigger model download
+downloadBtn.addEventListener("click", async () => {
+  progressBar.style.display = "block";
+  progressText.textContent = "0%";
+  try {
+    await downloadModelWithProgress(modelUrl);
+    downloadBtn.disabled = true;
+    progressText.textContent = "Download complete ✅";
+  } catch (err) {
+    console.error(err);
+    progressText.textContent = "Download failed ❌";
+  }
+});
+
+// Trigger file input
+captureBtn.addEventListener("click", () => {
+  fileInput.click();
+});
+
+// On file selected
+fileInput.addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file || !session) return;
+
+  const img = await loadImage(file);
+  const square = cropToSquare(img);
+  const resized = await resizeImage(square, 512, 512);
+  imageElement.src = resized.toDataURL();
+
+  const inputTensor = preprocessImage(resized);
+  const output = await session.run({ [session.inputNames[0]]: inputTensor });
+  const mask = new Uint8Array(output[session.outputNames[0]].data);
+  const [height, width] = [512, 512];
+  const result = postprocessMask(mask, width, height);
+
+  canvas.width = width;
+  canvas.height = height;
+  ctx.putImageData(result, 0, 0);
+});
+
+// Load image from file input
+function loadImage(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.src = URL.createObjectURL(file);
+  });
 }
 
-function overlaySegmentation(inputTensor, mask, colorMap, alpha = 0.4) {
-    const colorMask = new Array(mask.length).fill(0).map(() => new Array(mask[0].length).fill([0, 0, 0]));
+// Crop to square
+function cropToSquare(image) {
+  const canvas = document.createElement("canvas");
+  const size = Math.min(image.width, image.height);
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const sx = (image.width - size) / 2;
+  const sy = (image.height - size) / 2;
+  ctx.drawImage(image, sx, sy, size, size, 0, 0, size, size);
+  return canvas;
+}
 
-    for (let idx in colorMap) {
-        const color = colorMap[idx];
-        for (let i = 0; i < mask.length; i++) {
-            for (let j = 0; j < mask[i].length; j++) {
-                if (mask[i][j] === parseInt(idx)) {
-                    colorMask[i][j] = color;
-                }
-            }
-        }
+// Resize canvas image to 512x512
+function resizeImage(sourceCanvas, width, height) {
+  return new Promise((resolve) => {
+    const resizedCanvas = document.createElement("canvas");
+    resizedCanvas.width = width;
+    resizedCanvas.height = height;
+    const ctx = resizedCanvas.getContext("2d");
+    ctx.drawImage(sourceCanvas, 0, 0, width, height);
+    resolve(resizedCanvas);
+  });
+}
+
+// Preprocess image to Float32 tensor [1,3,512,512]
+function preprocessImage(canvas) {
+  const ctx = canvas.getContext("2d");
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const { data, width, height } = imgData;
+  const floatData = new Float32Array(3 * width * height);
+
+  const mean = [0.485, 0.456, 0.406];
+  const std = [0.229, 0.224, 0.225];
+
+  for (let i = 0; i < width * height; i++) {
+    for (let c = 0; c < 3; c++) {
+      floatData[c * width * height + i] = ((data[i * 4 + c] / 255.0) - mean[c]) / std[c];
     }
+  }
 
-    let inputImage = denormalize(inputTensor).squeeze().permute([1, 2, 0]).cpu().numpy();
-    inputImage = inputImage.mul(255).astype("uint8");
-
-    let overlay = inputImage.map((row, i) =>
-        row.map((pixel, j) => {
-            const color = colorMask[i][j];
-            return (1 - alpha) * pixel + alpha * color;
-        })
-    );
-
-    return overlay;
+  return new ort.Tensor("float32", floatData, [1, 3, height, width]);
 }
 
-// Handle the file input or photo capture
-function handleCapture(event) {
-    const file = fileInput.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = async function (e) {
-            const img = new Image();
-            img.onload = function () {
-                processImage(img);
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    }
+// Postprocess mask and overlay on canvas
+function postprocessMask(mask, width, height) {
+  const colorMap = {
+    0: [0, 0, 0],        // background
+    1: [255, 0, 0],      // lesion
+    2: [0, 0, 0]         // mouth
+  };
+
+  const imageData = new ImageData(width, height);
+  for (let i = 0; i < width * height; i++) {
+    const label = mask[i];
+    const [r, g, b] = colorMap[label] || [0, 0, 0];
+    imageData.data[i * 4 + 0] = r;
+    imageData.data[i * 4 + 1] = g;
+    imageData.data[i * 4 + 2] = b;
+    imageData.data[i * 4 + 3] = 128; // semi-transparent
+  }
+  return imageData;
 }
-
-async function processImage(image) {
-    const width = image.width;
-    const height = image.height;
-
-    // Crop to square logic
-    const minDim = Math.min(width, height);
-    const sx = (width - minDim) / 2;
-    const sy = (height - minDim) / 2;
-
-    // Create a new canvas to crop and resize the image
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = minDim;
-    canvas.height = minDim;
-
-    // Draw the cropped image onto the canvas
-    ctx.drawImage(image, sx, sy, minDim, minDim, 0, 0, minDim, minDim);
-
-    // Get the cropped image as a data URL
-    const croppedImageUrl = canvas.toDataURL();
-
-    // Create a new image with the cropped data
-    const croppedImage = new Image();
-    croppedImage.onload = function () {
-        processCroppedImage(croppedImage);
-    };
-    croppedImage.src = croppedImageUrl;
-}
-
-async function processCroppedImage(image) {
-    const width = image.width;
-    const height = image.height;
-
-    // Convert image to tensor
-    let tensor = await imageToTensor(image);
-
-    // Resize image to 512x512 and prepare it for inference
-    const resizedImage = await resizeImage(tensor, 512, 512);
-
-    // Perform inference with the model
-    const inputTensor = resizedImage.cpu().numpy();
-    const output = await runInference(inputTensor);
-    const predictedMask = np.argmax(output, axis=1).squeeze(0);
-
-    // Class color mapping
-    const classColors = {
-        0: [0, 0, 0],    // Background
-        1: [255, 0, 0],  // Lesion
-        2: [0, 0, 0]     // Mouth
-    };
-
-    // Generate the overlay
-    const overlayResult = overlaySegmentation(inputTensor, predictedMask, classColors, 0.4);
-
-    // Display the result
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const ctx = canvas.getContext("2d");
-    const overlayImageData = ctx.createImageData(image.width, image.height);
-    overlayImageData.data.set(overlayResult.flat());
-    ctx.putImageData(overlayImageData, 0, 0);
-
-    capturedImage.src = image.src;
-    capturedImage.style.display = "block";
-}
-
-// Helper to load image as a tensor
-async function imageToTensor(image) {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = image.width;
-    canvas.height = image.height;
-    ctx.drawImage(image, 0, 0);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    return tf.browser.fromPixels(imageData);
-}
-
-// Resize image to the target size
-async function resizeImage(imageTensor, targetWidth, targetHeight) {
-    return tf.image.resizeBilinear(imageTensor, [targetWidth, targetHeight]);
-}
-
-// Run inference on the model
-async function runInference(inputTensor) {
-    const inputName = model.inputNames[0];
-    const outputName = model.outputNames[0];
-    const result = await model.run({ [inputName]: inputTensor });
-    return result[outputName];
-}
-
-// Initialize the application
-window.onload = function () {
-    fileInput = document.getElementById("fileInput");
-    captureButton = document.getElementById("capture");
-    capturedImage = document.getElementById("capturedImage");
-    canvas = document.getElementById("canvas");
-
-    loadModel();
-
-    captureButton.addEventListener("click", () => {
-        fileInput.click();  // Trigger file input when capture button is clicked
-    });
-
-    fileInput.addEventListener("change", handleCapture);
-};
