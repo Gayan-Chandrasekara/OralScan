@@ -1,147 +1,162 @@
-const modelUrl = "https://firebasestorage.googleapis.com/v0/b/oral-cancer-detector-1e004.firebasestorage.app/o/model.onnx?alt=media&token=d17886be-78e8-4916-a377-4ff3c6b7ef68";
-let session = null;
-let video, canvas, ctx;
-
-const classColors = {
-  0: [0, 0, 0],       // Background
-  1: [255, 0, 0],     // Lesion
-  2: [0, 0, 0],       // Mouth (same as background for now)
-};
-
-window.onload = () => {
-  video = document.getElementById("video");
-  canvas = document.getElementById("outputCanvas");
-  ctx = canvas.getContext("2d");
-
-  loadModel();
-};
+let model, inputImage, canvas, capturedImage, fileInput, captureButton;
 
 async function loadModel() {
-  try {
-    session = await ort.InferenceSession.create(modelUrl);
-    console.log("✅ Model successfully downloaded and loaded.");
-    document.body.insertAdjacentHTML("beforeend", "<p style='color:green;'>Model loaded successfully ✅</p>");
-    startCamera();
-  } catch (error) {
-    console.error("❌ Failed to load model:", error);
-    document.body.insertAdjacentHTML("beforeend", `<p style='color:red;'>Error loading model ❌: ${error.message}</p>`);
-  }
+    const modelUrl = "https://firebasestorage.googleapis.com/v0/b/oral-cancer-detector-1e004.firebasestorage.app/o/model.onnx?alt=media&token=d17886be-78e8-4916-a377-4ff3c6b7ef68"; // Your ONNX model URL
+    model = await ort.InferenceSession.create(modelUrl);
 }
 
-function startCamera() {
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false })
-    .then((stream) => {
-      video.srcObject = stream;
-      video.onloadedmetadata = () => {
-        video.play();
-        requestAnimationFrame(processFrame);
-      };
-    })
-    .catch((err) => {
-      console.error("❌ Failed to access camera:", err);
+function denormalize(tensor) {
+    const mean = [0.485, 0.456, 0.406];
+    const std = [0.229, 0.224, 0.225];
+    tensor = tensor.mul(std).add(mean);
+    return tensor.clamp(0, 1);
+}
+
+function overlaySegmentation(inputTensor, mask, colorMap, alpha = 0.4) {
+    const colorMask = new Array(mask.length).fill(0).map(() => new Array(mask[0].length).fill([0, 0, 0]));
+
+    for (let idx in colorMap) {
+        const color = colorMap[idx];
+        for (let i = 0; i < mask.length; i++) {
+            for (let j = 0; j < mask[i].length; j++) {
+                if (mask[i][j] === parseInt(idx)) {
+                    colorMask[i][j] = color;
+                }
+            }
+        }
+    }
+
+    let inputImage = denormalize(inputTensor).squeeze().permute([1, 2, 0]).cpu().numpy();
+    inputImage = inputImage.mul(255).astype("uint8");
+
+    let overlay = inputImage.map((row, i) =>
+        row.map((pixel, j) => {
+            const color = colorMask[i][j];
+            return (1 - alpha) * pixel + alpha * color;
+        })
+    );
+
+    return overlay;
+}
+
+// Handle the file input or photo capture
+function handleCapture(event) {
+    const file = fileInput.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = async function (e) {
+            const img = new Image();
+            img.onload = function () {
+                processImage(img);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+async function processImage(image) {
+    const width = image.width;
+    const height = image.height;
+
+    // Crop to square logic
+    const minDim = Math.min(width, height);
+    const sx = (width - minDim) / 2;
+    const sy = (height - minDim) / 2;
+
+    // Create a new canvas to crop and resize the image
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = minDim;
+    canvas.height = minDim;
+
+    // Draw the cropped image onto the canvas
+    ctx.drawImage(image, sx, sy, minDim, minDim, 0, 0, minDim, minDim);
+
+    // Get the cropped image as a data URL
+    const croppedImageUrl = canvas.toDataURL();
+
+    // Create a new image with the cropped data
+    const croppedImage = new Image();
+    croppedImage.onload = function () {
+        processCroppedImage(croppedImage);
+    };
+    croppedImage.src = croppedImageUrl;
+}
+
+async function processCroppedImage(image) {
+    const width = image.width;
+    const height = image.height;
+
+    // Convert image to tensor
+    let tensor = await imageToTensor(image);
+
+    // Resize image to 512x512 and prepare it for inference
+    const resizedImage = await resizeImage(tensor, 512, 512);
+
+    // Perform inference with the model
+    const inputTensor = resizedImage.cpu().numpy();
+    const output = await runInference(inputTensor);
+    const predictedMask = np.argmax(output, axis=1).squeeze(0);
+
+    // Class color mapping
+    const classColors = {
+        0: [0, 0, 0],    // Background
+        1: [255, 0, 0],  // Lesion
+        2: [0, 0, 0]     // Mouth
+    };
+
+    // Generate the overlay
+    const overlayResult = overlaySegmentation(inputTensor, predictedMask, classColors, 0.4);
+
+    // Display the result
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const ctx = canvas.getContext("2d");
+    const overlayImageData = ctx.createImageData(image.width, image.height);
+    overlayImageData.data.set(overlayResult.flat());
+    ctx.putImageData(overlayImageData, 0, 0);
+
+    capturedImage.src = image.src;
+    capturedImage.style.display = "block";
+}
+
+// Helper to load image as a tensor
+async function imageToTensor(image) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    ctx.drawImage(image, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return tf.browser.fromPixels(imageData);
+}
+
+// Resize image to the target size
+async function resizeImage(imageTensor, targetWidth, targetHeight) {
+    return tf.image.resizeBilinear(imageTensor, [targetWidth, targetHeight]);
+}
+
+// Run inference on the model
+async function runInference(inputTensor) {
+    const inputName = model.inputNames[0];
+    const outputName = model.outputNames[0];
+    const result = await model.run({ [inputName]: inputTensor });
+    return result[outputName];
+}
+
+// Initialize the application
+window.onload = function () {
+    fileInput = document.getElementById("fileInput");
+    captureButton = document.getElementById("capture");
+    capturedImage = document.getElementById("capturedImage");
+    canvas = document.getElementById("canvas");
+
+    loadModel();
+
+    captureButton.addEventListener("click", () => {
+        fileInput.click();
     });
-}
 
-async function processFrame() {
-  if (!session) return requestAnimationFrame(processFrame);
-
-  // Capture and preprocess
-  const inputTensor = preprocessVideo(video);
-
-  try {
-    const feeds = {};
-    feeds[session.inputNames[0]] = inputTensor;
-    const results = await session.run(feeds);
-    const output = results[session.outputNames[0]];
-    const mask = argmax(output.data, output.dims[2], output.dims[3]);
-
-    drawOverlay(video, mask);
-  } catch (err) {
-    console.error("❌ Inference error:", err);
-  }
-
-  requestAnimationFrame(processFrame);
-}
-
-function preprocessVideo(videoElement) {
-  const size = 512;
-  const tempCanvas = document.createElement("canvas");
-  const ctx2 = tempCanvas.getContext("2d");
-
-  // Crop square
-  const minDim = Math.min(videoElement.videoWidth, videoElement.videoHeight);
-  const sx = (videoElement.videoWidth - minDim) / 2;
-  const sy = (videoElement.videoHeight - minDim) / 2;
-
-  tempCanvas.width = size;
-  tempCanvas.height = size;
-  ctx2.drawImage(videoElement, sx, sy, minDim, minDim, 0, 0, size, size);
-
-  const imageData = ctx2.getImageData(0, 0, size, size);
-  const data = Float32Array.from(imageData.data);
-
-  const input = new Float32Array(1 * 3 * size * size);
-  const mean = [0.485, 0.456, 0.406];
-  const std = [0.229, 0.224, 0.225];
-
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const offset = (y * size + x) * 4;
-      for (let c = 0; c < 3; c++) {
-        const value = data[offset + c] / 255.0;
-        input[c * size * size + y * size + x] = (value - mean[c]) / std[c];
-      }
-    }
-  }
-
-  return new ort.Tensor("float32", input, [1, 3, size, size]);
-}
-
-function argmax(data, height, width) {
-  const mask = new Uint8ClampedArray(height * width);
-  const numClasses = data.length / (height * width);
-
-  for (let i = 0; i < height * width; i++) {
-    let maxVal = -Infinity;
-    let maxIdx = 0;
-    for (let c = 0; c < numClasses; c++) {
-      const val = data[c * height * width + i];
-      if (val > maxVal) {
-        maxVal = val;
-        maxIdx = c;
-      }
-    }
-    mask[i] = maxIdx;
-  }
-
-  return mask;
-}
-
-function drawOverlay(video, mask) {
-  const width = canvas.width = video.videoWidth;
-  const height = canvas.height = video.videoHeight;
-
-  const imageData = ctx.getImageData(0, 0, width, height);
-  const overlay = new Uint8ClampedArray(width * height * 4);
-
-  const scale = width / 512;
-
-  for (let y = 0; y < 512; y++) {
-    for (let x = 0; x < 512; x++) {
-      const idx = y * 512 + x;
-      const color = classColors[mask[idx]];
-      const dx = Math.floor(x * scale);
-      const dy = Math.floor(y * scale);
-      const destIdx = (dy * width + dx) * 4;
-
-      overlay[destIdx] = color[0];
-      overlay[destIdx + 1] = color[1];
-      overlay[destIdx + 2] = color[2];
-      overlay[destIdx + 3] = 100; // Alpha
-    }
-  }
-
-  const overlayImage = new ImageData(overlay, width, height);
-  ctx.drawImage(video, 0, 0, width, height);
-  ctx.putImageData(overlayImage, 0, 0);
-}
+    fileInput.addEventListener("change", handleCapture);
+};
