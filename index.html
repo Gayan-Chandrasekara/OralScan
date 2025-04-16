@@ -1,121 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Capture & Segmentation</title>
-    <style>
-        #capturedImage {
-            max-width: 100%;
-            max-height: 400px;
-        }
-        canvas {
-            border: 1px solid #000;
-            display: block;
-            margin-top: 20px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Oral Cancer Detection</title>
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f9f9f9;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 24px;
+      color: #111;
+    }
+
+    button {
+      font-size: 16px;
+      padding: 10px 20px;
+      margin: 10px;
+      border: none;
+      border-radius: 12px;
+      background-color: #007AFF;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background-color: #ccc;
+    }
+
+    progress {
+      width: 80%;
+      margin: 10px auto;
+      display: block;
+    }
+
+    #progressPercent {
+      font-size: 14px;
+      color: #333;
+    }
+
+    img, canvas {
+      max-width: 90%;
+      margin: 10px auto;
+      display: block;
+      border-radius: 10px;
+    }
+  </style>
 </head>
 <body>
 
-    <!-- Download Model Section -->
-    <button id="downloadModel">Download Model</button>
-    <br>
+  <h1>Oral Cancer Segmentation</h1>
 
-    <!-- Capture Photo Section -->
-    <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
-    <button id="capture">Capture Photo</button>
-    <br>
-    <img id="capturedImage" style="display: none;">
-    <canvas id="canvas"></canvas>
+  <!-- Model Download -->
+  <button id="downloadModel">Download Model</button>
+  <progress id="modelProgress" value="0" max="100" style="display:none;"></progress>
+  <div id="progressPercent"></div>
 
-    <!-- Include TensorFlow.js (if required for tensor operations) -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <!-- Photo Capture -->
+  <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none;">
+  <button id="capture">Capture Photo</button>
 
-    <!-- Include ONNX Runtime Web (for running ONNX model) -->
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.7.0/dist/onnxruntime-web.js"></script>
+  <!-- Captured Image Preview -->
+  <img id="capturedImage" alt="Captured Image" />
 
-    <!-- Overlay and Image Processing JavaScript -->
-    <script src="overlay.js"></script>
+  <!-- Canvas Output -->
+  <canvas id="canvas"></canvas>
 
-    <script>
-        // Global variable to hold the model path after downloading
-        let model = null;
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <script src="overlay.js" defer></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(reg => console.log('Service Worker registered:', reg))
+        .catch(err => console.error('Service Worker registration failed:', err));
+    }
+  </script>
 
-        // Check if the browser supports service workers
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then((registration) => {
-                        console.log('Service Worker registered with scope: ', registration.scope);
-                    })
-                    .catch((error) => {
-                        console.log('Service Worker registration failed: ', error);
-                    });
-            });
-        }
-
-        window.onload = function () {
-            // Download Model Button
-            const downloadModelButton = document.getElementById('downloadModel');
-            downloadModelButton.addEventListener('click', downloadModel);
-
-            // Other button events (capture image, etc.)
-            const fileInput = document.getElementById("fileInput");
-            const captureButton = document.getElementById("capture");
-            const capturedImage = document.getElementById("capturedImage");
-            const canvas = document.getElementById("canvas");
-
-            // Load model once downloaded (this part can be invoked after model download)
-            captureButton.addEventListener("click", () => {
-                fileInput.click();  // Trigger file input when capture button is clicked
-            });
-
-            fileInput.addEventListener("change", handleCapture);
-        };
-
-        // Function to download model from Firebase Storage
-        function downloadModel() {
-            // URL for the model hosted on Firebase Storage
-            const modelURL = 'https://firebasestorage.googleapis.com/v0/b/oral-cancer-detector-1e004.firebasestorage.app/o/model.onnx?alt=media&token=d17886be-78e8-4916-a377-4ff3c6b7ef68';
-
-            // Fetch model file
-            fetch(modelURL)
-                .then(response => {
-                    if (response.ok) {
-                        return response.arrayBuffer();
-                    }
-                    throw new Error('Failed to download model');
-                })
-                .then(data => {
-                    model = new onnx.Model(data);
-                    console.log("Model successfully downloaded and loaded.");
-                    alert("Model downloaded successfully!");
-                })
-                .catch(error => {
-                    console.error("Error downloading model:", error);
-                    alert("Error downloading model!");
-                });
-        }
-
-        // Handle image capture and inference (you can use your existing methods for this)
-        function handleCapture(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const img = new Image();
-                    img.onload = function() {
-                        // Process the image and run inference
-                        capturedImage.src = img.src;
-                        capturedImage.style.display = 'block';
-                    };
-                    img.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            }
-        }
-    </script>
 </body>
 </html>
-
