@@ -2,86 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Oral Cancer Detection</title>
-  <link rel="manifest" href="manifest.json" />
+  <title>Oral Cancer Segmentation</title>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <script defer src="overlay.js"></script>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: #f9f9f9;
-      margin: 0;
-      padding: 20px;
-      text-align: center;
-    }
-
-    h1 {
-      font-size: 24px;
-      color: #111;
-    }
-
-    button {
-      font-size: 16px;
-      padding: 10px 20px;
-      margin: 10px;
-      border: none;
-      border-radius: 12px;
-      background-color: #007AFF;
-      color: white;
-      cursor: pointer;
-    }
-
-    button:disabled {
-      background-color: #ccc;
-    }
-
-    progress {
-      width: 80%;
-      margin: 10px auto;
-      display: block;
-    }
-
-    #progressPercent {
-      font-size: 14px;
-      color: #333;
-    }
-
-    img, canvas {
-      max-width: 90%;
-      margin: 10px auto;
-      display: block;
-      border-radius: 10px;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; margin: 2rem; }
+    video, canvas, img { width: 90%; max-width: 400px; margin: 10px auto; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    button { padding: 10px 20px; font-size: 16px; border: none; border-radius: 8px; background: #007aff; color: white; margin: 1rem; }
+    #progress { margin-top: 10px; font-weight: bold; }
   </style>
 </head>
 <body>
-
-  <h1>Oral Cancer Segmentation</h1>
-
-  <!-- Model Download -->
+  <h2>Oral Cancer Detection</h2>
+  
   <button id="downloadModel">Download Model</button>
-  <progress id="modelProgress" value="0" max="100" style="display:none;"></progress>
-  <div id="progressPercent"></div>
+  <div id="progress">Model not downloaded</div>
 
-  <!-- Photo Capture -->
-  <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none;">
+  <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
   <button id="capture">Capture Photo</button>
 
-  <!-- Captured Image Preview -->
   <img id="capturedImage" alt="Captured Image" />
-
-  <!-- Canvas Output -->
-  <canvas id="canvas"></canvas>
-
-  <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-  <script src="overlay.js" defer></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('service-worker.js')
-        .then(reg => console.log('Service Worker registered:', reg))
-        .catch(err => console.error('Service Worker registration failed:', err));
-    }
-  </script>
-
+  <canvas id="canvas" width="512" height="512"></canvas>
 </body>
 </html>
