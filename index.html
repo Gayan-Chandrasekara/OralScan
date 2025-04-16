@@ -1,27 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Real-time Segmentation Overlay</title>
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-  <script defer src="overlay.js"></script>
-  <style>
-    body { font-family: sans-serif; text-align: center; }
-    video, canvas, img { width: 90%; max-width: 400px; margin-top: 10px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capture & Segmentation</title>
+    <style>
+        #capturedImage {
+            max-width: 100%;
+            max-height: 400px;
+        }
+        canvas {
+            border: 1px solid #000;
+            display: block;
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
-  <h2>Live Segmentation</h2>
-  <!-- Photo Capture Input -->
-  <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
-  <button id="capture">Capture Photo</button>
-  
-  <img id="capturedImage" style="display:none;" />
-  <canvas id="canvas"></canvas>
 
-  <!-- Service Worker setup remains intact -->
-  <script src="serviceWorkerSetup.js"></script>
+    <!-- Capture Photo Section -->
+    <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
+    <button id="capture">Capture Photo</button>
+    <br>
+    <img id="capturedImage" style="display: none;">
+    <canvas id="canvas"></canvas>
+
+    <!-- Include TensorFlow.js (if required for tensor operations) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+    <!-- Include ONNX Runtime Web (for running ONNX model) -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.7.0/dist/onnxruntime-web.js"></script>
+
+    <!-- Overlay and Image Processing JavaScript -->
+    <script src="overlay.js"></script>
+
+    <script>
+        // Check if the browser supports service workers
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then((registration) => {
+                        console.log('Service Worker registered with scope: ', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.log('Service Worker registration failed: ', error);
+                    });
+            });
+        }
+
+        // Wait for window to load and then initialize the required functions
+        window.onload = function () {
+            fileInput = document.getElementById("fileInput");
+            captureButton = document.getElementById("capture");
+            capturedImage = document.getElementById("capturedImage");
+            canvas = document.getElementById("canvas");
+
+            loadModel();
+
+            captureButton.addEventListener("click", () => {
+                fileInput.click();  // Trigger file input when capture button is clicked
+            });
+
+            fileInput.addEventListener("change", handleCapture);
+        };
+    </script>
 </body>
 </html>
-
